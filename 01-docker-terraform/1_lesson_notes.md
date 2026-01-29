@@ -243,3 +243,198 @@ df_iter = pd.read_csv(
 )
 
 ```
+
+
+## 6 Ingestion logic from notebook to script
+
+create .py file based on notebook 
+
+`uv run jupyter nbconvert --to=script notebook.ipynb`
+
+`uv run python ingest_data.py`
+
+click for command-line argument parsing:
+
+`uv add click`
+
+
+Now command line -help function has description:
+
+```python
+import click
+
+@click.command()
+@click.option('--pg-user', default='root', help='PostgreSQL user')
+@click.option('--pg-pass', default='root', help='PostgreSQL password')
+@click.option('--pg-host', default='localhost', help='PostgreSQL host')
+@click.option('--pg-port', default=5432, type=int, help='PostgreSQL port')
+@click.option('--pg-db', default='ny_taxi', help='PostgreSQL database name')
+@click.option('--target-table', default='yellow_taxi_data', help='Target table name')
+def run(pg_user, pg_pass, pg_host, pg_port, pg_db, target_table):
+    # Ingestion logic here
+    pass
+```
+
+
+
+```
+uv run python ingest_data.py --pg-user=root --pg-pass=root --pg-host=localhost --pg-port=5432 --pg-db=ny_taxi --target-table=yellow_taxi_trips_2021_1
+```
+
+
+## 7 Dockerizing the Ingestion Script
+
+We run pipeline script via virt env. 
+We had docker container with db.
+But this time we run second container that has pipeline script that will ingest data to db in first Docker container
+
+
+Dockerfile:
+
+```
+FROM python:3.13.11-slim
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
+
+WORKDIR /code
+ENV PATH="/code/.venv/bin:$PATH"
+
+COPY pyproject.toml .python-version uv.lock ./
+RUN uv sync --locked
+
+COPY ingest_data.py .
+
+ENTRYPOINT ["uv", "run", "python", "ingest_data.py"]
+```
+
+now build container based on updated Dickerfile: 
+
+`docker build -t taxi_ingest:v001 .`
+
+`docker network create pg-network`
+
+
+postgres container:
+
+```
+docker run -it --rm `
+  --name pgdatabase `
+  --network=pg-network `
+  -e POSTGRES_USER=root `
+  -e POSTGRES_PASSWORD=root `
+  -e POSTGRES_DB=ny_taxi `
+  -v ny_taxi_postgres_data:/var/lib/postgresql `
+  -p 5432:5432 `
+  postgres:18
+
+```
+
+
+now run the image:
+
+```
+docker run -it --rm `
+    --network=pg-network `
+    taxi_ingest:v003 `
+    --pg-user=root `
+    --pg-pass=root `
+    --pg-host=pgdatabase `
+    --pg-port=5432 `
+    --pg-db=ny_taxi `
+    --target-table=yellow_taxi_trips_2021_1 `
+    --chunksize=100000
+```
+
+network
+now 2 containers become part of same network and see each other
+this allows us to tell second ingestion container to connect not to its own 5432 port but port of the first pgdatabase container's port  
+
+
+
+I had a problem after 2nd docker command. I had to rebuid the image:
+
+`docker build -t taxi_ingest:v004 .`
+
+
+
+## 8 pgAdmin
+
+We add new container inside the same network - pgAdmin. 
+Its UI to manage DB, easier than CLI. 
+
+
+
+
+Stop both containers and re-run them with the network configuration:
+
+- Run PostgreSQL on the network
+
+```
+docker run -it \
+  -e POSTGRES_USER="root" \
+  -e POSTGRES_PASSWORD="root" \
+  -e POSTGRES_DB="ny_taxi" \
+  -v ny_taxi_postgres_data:/var/lib/postgresql \
+  -p 5432:5432 \
+  --network=pg-network \
+  --name pgdatabase \
+  postgres:18
+
+-- In another terminal, run pgAdmin on the same network
+
+docker run -it `
+  -e PGADMIN_DEFAULT_EMAIL="admin@admin.com" `
+  -e PGADMIN_DEFAULT_PASSWORD="root" `
+  -v pgadmin_data:/var/lib/pgadmin `
+  -p 8085:80 `
+  --network=pg-network `
+  --name pgadmin `
+  dpage/pgadmin4
+
+```
+
+- pgadmin image is downloaded from DockerHub
+- 8085 outside port, 80 inside port 
+
+=> http://127.0.0.1:8085/
+=> admin@admin.com
+=> root
+
+Server
+=> server pg
+=> hostname pgdatabase
+=> username root
+
+
+
+## 9 Docker compose 
+
+**docker_compose.yaml** 
+
+docker containers that you define in docker_compose file by default run within the same network
+
+`docker-compose up -d`
+or 
+`docker-compose -f docker_compose.yaml up -d`
+
+show containers in network 
+
+`docker network ls`
+
+Since we run pg-admin in docker_compose from scratch, now db is empty. To populate db, ingest data.
+
+Run container that ingest data
+
+```
+docker run -it --rm `
+    --network=pipeline_default `
+    taxi_ingest:v003 `
+    --pg-user=root `
+    --pg-pass=root `
+    --pg-host=pgdatabase `
+    --pg-port=5432 `
+    --pg-db=ny_taxi `
+    --target-table=yellow_taxi_trips_2021_1 `
+    --chunksize=100000
+```
+
+
