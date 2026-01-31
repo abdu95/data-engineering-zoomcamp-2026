@@ -438,3 +438,10 @@ docker run -it --rm `
 ```
 
 
+Remove all stopped containers
+
+`docker container prune`
+
+
+Remove all unused images
+`docker image prune -a`
