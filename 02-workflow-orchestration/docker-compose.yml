@@ -58,7 +58,9 @@ services:
       - kestra_data:/app/storage
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/kestra-wd:/tmp/kestra-wd
+      - ./gcp/infinite-sight-486200-b0-c1d9b4588d9a.json:/var/secrets/google/infinite-sight-486200-b0-c1d9b4588d9a.json:ro
     environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/infinite-sight-486200-b0-c1d9b4588d9a.json
       KESTRA_CONFIGURATION: |
         datasources:
           postgres:

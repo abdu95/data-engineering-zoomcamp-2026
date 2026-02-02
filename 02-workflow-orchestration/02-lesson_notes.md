@@ -210,3 +210,131 @@ Now we can use this trigger for backfill. Backfil is going to previous time when
 
 
 
+
+### 2.4.2 ELT Pipelines in Kestra: Google Cloud Platform
+
+Now that you've learned how to build ETL pipelines locally using Postgres, we are ready to move to the cloud. In this section, we'll load the same Yellow and Green Taxi data to Google Cloud Platform (GCP) using: 
+1. Google Cloud Storage (GCS) as a data lake  
+2. BigQuery as a data warehouse.
+
+
+
+### 2.4.1 - ETL vs ELT
+
+In 2.3, we made a ETL pipeline inside of Kestra:
+- **Extract:** Firstly, we extract the dataset from GitHub
+- **Transform:** Next, we transform it with Python
+- **Load:** Finally, we load it into our Postgres database
+
+While this is very standard across the industry, sometimes it makes sense to change the order when working with the cloud. If you're working with a large dataset, like the Yellow Taxi data, there can be benefits to extracting and loading straight into a data warehouse, and then performing transformations directly in the data warehouse. When working with BigQuery, we will use ELT:
+- **Extract:** Firstly, we extract the dataset from GitHub
+- **Load:** Next, we load this dataset (in this case, a csv file) into a data lake (Google Cloud Storage)
+- **Transform:** Finally, we can create a table inside of our data warehouse (BigQuery) which uses the data from our data lake to perform our transformations.
+
+The reason for loading into the data warehouse before transforming means we can utilize the cloud's performance benefits for transforming large datasets. What might take a lot longer for a local machine, can take a fraction of the time in the cloud.
+
+
+
+- open GCP account 
+
+- create new project in GCP 
+  kestra-sandbox
+  ID: infinite-sight-486200-b0
+
+Key that allows Kestra to connect to GCP: 
+
+- IAM > Service Account
+  name: de-zoomcamp-2026
+  role: Owner
+  Keys > Add key > JSON 
+
+
+- Load key JSON file to Kestra
+  create environment variable inside Docker compose
+
+
+echo -n "myCode" | base64 
+=> cd1234 
+
+docker-compose: 
+```
+kestra:
+  environment:
+    SECRET_MYSECRET: cd1234
+```
+
+flow:
+`{{secret('MY_SECRET)}}`
+
+
+- add json to flow 06_gcp_kv and execute it
+
+Kestra now has all GCP configuration stored internally.
+
+- execute flow 07_gcp_setup.yaml 
+
+Kestra authenticates using GCP_CREDS
+
+Creates:
+
+  GCS bucket + BigQuery dataset
+
+  Skips creation if they already exist
+
+
+Cloud Storage => Buckets
+
+BigQuery => Explorer => Datasets
+
+
+### 2.4.3   GCP Workflow: Load Taxi Data to BigQuery
+
+Now that Google Cloud is set up with a storage bucket, we can start the ELT process.
+
+The steps are similar to loading data to Postgres DB. But this time we load CSV file to Data Lake - GCP Bucket. Then we load CSV data to DWH - BigQuery. 
+
+`08_gcp_taxi.yaml`
+
+
+
+```mermaid
+graph LR
+  SetLabel[Set Labels] --> Extract[Extract CSV Data]
+  Extract --> UploadToGCS[Upload Data to GCS]
+  UploadToGCS -->|Taxi=Yellow| BQYellowTripdata[Main Yellow Tripdata Table]:::yellow
+  UploadToGCS -->|Taxi=Green| BQGreenTripdata[Main Green Tripdata Table]:::green
+  BQYellowTripdata --> BQYellowTableExt[External Table]:::yellow
+  BQGreenTripdata --> BQGreenTableExt[External Table]:::green
+  BQYellowTableExt --> BQYellowTableTmp[Monthly Table]:::yellow
+  BQGreenTableExt --> BQGreenTableTmp[Monthly Table]:::green
+  BQYellowTableTmp --> BQYellowMerge[Merge to Main Table]:::yellow
+  BQGreenTableTmp --> BQGreenMerge[Merge to Main Table]:::green
+  BQYellowMerge --> PurgeFiles[Purge Files]
+  BQGreenMerge --> PurgeFiles[Purge Files]
+
+  classDef yellow fill:#FFD700,stroke:#000,stroke-width:1px;
+  classDef green fill:#32CD32,stroke:#000,stroke-width:1px;
+```
+
+
+For a chosen taxi type, year, and month the flow does the following:
+
+Downloads NYC taxi data (CSV)
+Uploads it to Google Cloud Storage (upload_to_gcs)
+Creates BigQuery tables if needed
+Loads data via an external table
+Deduplicates and merges into a final partitioned table
+Cleans up temporary files
+
+Same pipeline, two branches: Yellow taxi & Green taxi 
+
+
+
+Trigger
+
+We can now schedule the same pipeline shown above to run daily at 9 AM UTC for the green dataset and at 10 AM UTC for the yellow dataset. You can backfill historical data directly from the Kestra UI.
+
+Since we now process data in a cloud environment with infinitely scalable storage and compute, we can backfill the entire dataset for both the yellow and green taxi data without the risk of running out of resources on our local machine.
+
+The flow code: 09_gcp_taxi_scheduled.yaml.
+
