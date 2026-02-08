@@ -1,6 +1,6 @@
 # Data Engineering Zoomcamp 
 
-## Homework 1: Workflow orchestration
+## Homework 2: Workflow orchestration
 
 For the homework, we'll be working with the green taxi dataset located here:
 

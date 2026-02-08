@@ -7,6 +7,14 @@
 02-workflow-orchestration
 
 - GCP video
+- dbt workshop
+https://www.youtube.com/live/HxMIsPrIyGQ 
+- Data Warehouse
+https://www.youtube.com/watch?v=DYlpLuFwNj8
+- Data lake 
+https://www.youtube.com/watch?v=tIf01lpweVg
+- Using AI for Data Engineering in Kestra
+
 
 1. as you can see, I am getting CSV file and inserting into database. 
 I want to modify my flow: I want to create ctrl_row_count  table. these table will have columns: taxi_type (green or yellow), year, month, csv_row_count and table_row_count.  
