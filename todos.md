@@ -14,6 +14,7 @@ https://www.youtube.com/watch?v=DYlpLuFwNj8
 - Data lake 
 https://www.youtube.com/watch?v=tIf01lpweVg
 - Using AI for Data Engineering in Kestra
+- GCP Machine Learning
 
 
 1. as you can see, I am getting CSV file and inserting into database. 
